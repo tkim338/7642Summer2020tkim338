@@ -1,0 +1,12 @@
+public class NDie {
+  public static outcome;
+  
+  public NDie(ArrayList<int> isBad) {
+    outcome = 1;
+  }
+  
+  public static void main(String[] args) {
+    System.out.println("test");
+    NDie algo = new NDie();
+  }
+}

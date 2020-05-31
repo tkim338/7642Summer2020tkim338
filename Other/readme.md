@@ -1,1 +1,1 @@
-Other readme
+Homework files stored here
