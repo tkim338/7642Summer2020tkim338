@@ -1,5 +1,3 @@
-#delta_w_t = alpha * (next_state - curr_state) * sum(lamb**(t-k) * grad_w * state_k)
-
 import matplotlib.pyplot as plt
 import numpy as np
 import math

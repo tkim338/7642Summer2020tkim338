@@ -1,3 +1,5 @@
+#delta_w_t = alpha * (next_state - curr_state) * sum(lamb**(t-k) * grad_w * state_k)
+
 import matplotlib.pyplot as plt
 import numpy as np
 import math
@@ -23,6 +25,14 @@ def computeGT(): # compute ground truth
 	
 	return values
 	
+def computeReturn(vals, i):
+	if i == 0:
+		return 0
+	elif i == len(vals)-1:
+		return 1
+	else:
+		return (vals[i-1]+vals[i+1])/2
+		
 def generateTrainingSets(sets=100, sequences=10):
 	trainingData = []
 	for i in range(0,sets):
@@ -49,63 +59,63 @@ def printTrainingData(data):
 		for seq in set:
 			print(seq)
 	print('==================== training data ====================')
-	
-def computeReturn(vals, i, lr=0.5):
-	if i == 0:
-		return 0
-	elif i == len(vals)-1:
-		return 1
-	else:
-		#return vals[i] + lr * ((vals[i-1]+vals[i+1])/2 - vals[i])
-		return (vals[i-1]+vals[i+1])/2
-		
-def updateEstimate(currEstimate, newSeq, lamb, lr=0.1):
-	delta = [0] * len(currEstimate)
-	for ind in range(0,len(newSeq)-1): # skip end state
-		state = newSeq[ind]
-		
-		newEstimate = 0
-		endWeight = 1
-		for i in range(ind+1, len(newSeq)):
-			n = i - ind
-			newEstimate += (1-lamb) * lamb**(n-1) * computeReturn(currEstimate, newSeq[i])
-			endWeight -= (1-lamb) * lamb**(n-1)
-		newEstimate += endWeight * computeReturn(currEstimate, newSeq[-1])
 
-		delta[state] += lr * (newEstimate - currEstimate[state])
-		currEstimate[state] += lr * (newEstimate - currEstimate[state])
-	return currEstimate#, delta
+def computeRMSE(gt, values):
+	return math.sqrt(sum((values - gt)**2)/len(gt))
 
-def estimateValues(data, lamb, lr, threshold=0.001):
-	estimates_list = []
-	n = -1
+##########################################################################################
+
+def computeSum(subSeq, lamb, values):
+	summation = 0
+	origVal = values[subSeq[0]]
+	finalLamb = 1
+	for k in range(1, len(subSeq)-1): # exclude first and last states
+		newVal = values[subSeq[k]]
+		#print('===='+str(subSeq)+'; '+str(origVal)+', '+str(newVal))
+		summation += (1 - lamb) * lamb**(k-1) * (newVal - origVal)
+		finalLamb -= (1 - lamb) * lamb**(k-1)
+		#print(summation)
+	terminalVal = values[subSeq[-1]]
+	summation += finalLamb * (terminalVal - origVal)
+	#print(summation)
+	return summation
+
+def computeDelta(seq, lamb, alpha, values):
+	delta = np.array(values[:] * 0.0)
+	for i in range(0, len(seq)):
+		delta[seq[i]] += alpha * computeSum(seq[i:], lamb, values)
+	return delta
+
+def processSet(set, lamb, alpha=0.01, threshold=0.0001):
+	values = np.array([0,0,0,0,0,0,1.0])
+	deltas = np.array([1.0]*7)
+	while max(abs(deltas)) > threshold:
+	#for i in range(0,100):
+		deltas = np.array([0.0]*7)
+		for seq in set:
+			d = computeDelta(seq, lamb, alpha, values)
+			deltas += d#/len(set)
+			#values += d
+		values += deltas
+		#print('values: '+str(values))
+		#print('prevValues: '+str(prevValues))
+	#print(values)
+	return values
+
+def computeError(gt, data, lamb):
+	errors = np.array([])
 	for set in data:
-		n += 1
-		estimates = [0.0,0,0,0,0,0,1]
-		prevEstimates = [0,0,0,0,0,0,0]
-		while max(abs(np.array(estimates) - np.array(prevEstimates))) > threshold:
-			prevEstimates = estimates[:]
-			est_delta = np.array([0.0]*7)
-			for seq in set:
-				estimates = updateEstimate(estimates, seq, lamb, lr)
-				# temp, delta = updateEstimate(estimates, seq, lamb, lr)
-				# est_delta += np.array(delta)
-			# estimates += est_delta
-		estimates_list.append(estimates)
-	return estimates_list
+		values = processSet(set, lamb)
+		errors = np.append(errors, computeRMSE(gt, values))
+	return np.mean(errors)
 
-def computeError(gt, data, lamb, lr):
-	est_list = estimateValues(data, lamb, lr)
-	errors = []
-	for e in est_list:
-		errors.append(math.sqrt(sum((np.array(e) - np.array(gt))**2)/len(e)))
-	return sum(errors)/len(errors)
+##########################################################################################
 
 def getFigure3(gt, data):
 	errors = []
 	lambdas = []
 	for lamb in np.arange(0.0,1.1,0.1):
-		errors.append(computeError(gt, data, lamb, 0.1))
+		errors.append(computeError(gt, data, lamb))
 		lambdas.append(lamb)
 		
 	plt.figure()
@@ -115,10 +125,9 @@ def getFigure3(gt, data):
 	plt.ylabel('RMS error')
 	plt.show()
 
-#np.random.seed(1)
+np.random.seed(1)
 gt = computeGT()
 data = generateTrainingSets(100, 10)
 
-#figure3(gt, data)
-err = computeError(gt, data, lamb=1, lr=0.1)
-print(err)
+getFigure3(gt, data)
+#print(computeError(gt, data, 0.5))
