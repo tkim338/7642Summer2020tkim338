@@ -86,26 +86,35 @@ def computeDelta(seq, lamb, alpha, values):
 		delta[seq[i]] += alpha * computeSum(seq[i:], lamb, values)
 	return delta
 
-def processSet(set, lamb, alpha=0.01, threshold=0.0001):
-	values = np.array([0,0,0,0,0,0,1.0])
+def processSet_fig3(set, lamb, alpha, threshold=0.0001):
+	values = np.array([0, 0, 0, 0, 0, 0, 1.0])
 	deltas = np.array([1.0]*7)
-	while max(abs(deltas)) > threshold:
-	#for i in range(0,100):
+	n = 0
+	while max(abs(deltas)) > threshold and n < 100:
+		n += 1
 		deltas = np.array([0.0]*7)
 		for seq in set:
 			d = computeDelta(seq, lamb, alpha, values)
-			deltas += d#/len(set)
-			#values += d
+			deltas += d
 		values += deltas
-		#print('values: '+str(values))
-		#print('prevValues: '+str(prevValues))
-	#print(values)
 	return values
 
-def computeError(gt, data, lamb):
+def processSet_fig4(set, lamb, alpha):
+	values = np.array([0, 0.5, 0.5, 0.5, 0.5, 0.5, 1.0])
+
+	for seq in set:
+		values += computeDelta(seq, lamb, alpha, values)
+
+	return values
+
+def computeError(gt, data, lamb, alpha=0.01, fig=3):
 	errors = np.array([])
+	values = np.array([])
 	for set in data:
-		values = processSet(set, lamb)
+		if fig == 3:
+			values = processSet_fig3(set, lamb, alpha)
+		elif fig == 4:
+			values = processSet_fig4(set, lamb, alpha)
 		errors = np.append(errors, computeRMSE(gt, values))
 	return np.mean(errors)
 
@@ -114,20 +123,48 @@ def computeError(gt, data, lamb):
 def getFigure3(gt, data):
 	errors = []
 	lambdas = []
-	for lamb in np.arange(0.0,1.1,0.1):
-		errors.append(computeError(gt, data, lamb))
+	for lamb in np.arange(0.0, 1.1, 0.1):
+		errors.append(computeError(gt, data, lamb, fig=3))
 		lambdas.append(lamb)
 		
 	plt.figure()
 	plt.plot(lambdas, errors)
-	plt.title('Average error')
+	plt.title('Figure 3: Average error under repeated presentations')
 	plt.xlabel('lambda')
 	plt.ylabel('RMS error')
 	plt.show()
+
+def getFigure4(gt, data):
+	handles = []
+	chartData = []
+	for lamb in [0, 0.3, 0.8, 1]:
+		label = 'lambda = '+str(lamb)
+		errors = []
+		alphas = []
+		for alpha in np.arange(0.0, 0.61, 0.01):
+			errors.append(computeError(gt, data, lamb, alpha, fig=4))
+			alphas.append(alpha)
+		chartData.append([alphas, errors, label])
+
+	plt.figure()
+	for datum in chartData:
+		h = plt.plot(datum[0], datum[1], label=datum[2])
+		handles += h
+	plt.legend(handles=handles)
+	axes = plt.gca()
+	axes.set_ylim([0, 0.8])
+	plt.title('Figure 4: Average error with varying alpha and lambda')
+	plt.xlabel('alpha')
+	plt.ylabel('RMS error')
+	plt.show()
+
+def getFigure5(gt, data):
+	
+
 
 np.random.seed(1)
 gt = computeGT()
 data = generateTrainingSets(100, 10)
 
-getFigure3(gt, data)
-#print(computeError(gt, data, 0.5))
+#getFigure3(gt, data)
+getFigure4(gt, data)

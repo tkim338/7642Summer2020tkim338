@@ -1,0 +1,10 @@
+issues:
+
+fig 3
+not presenting data repeatedly until convergence
+not updating after full set instead of after each sequence
+
+fig 4
+using same update schema as fig 3
+not setting initial values to 0.5 (using 0 instead, like fig 3)
+
