@@ -10,6 +10,7 @@ not setting initial values to 0.5 (using 0 instead, like fig 3)
 
 overall
 used first and last terminal states in error calculation, artificially decreasing it
+using only states after state in question to update value
 
 Assumptions
 Fig 3
