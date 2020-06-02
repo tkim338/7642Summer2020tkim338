@@ -8,3 +8,14 @@ fig 4
 using same update schema as fig 3
 not setting initial values to 0.5 (using 0 instead, like fig 3)
 
+overall
+used first and last terminal states in error calculation, artificially decreasing it
+
+Assumptions
+Fig 3
+	threshold = 0.0001
+	alpha = 0.01
+	initial weights = [0,0,0,...,0,1]
+	
+Fig 4
+	

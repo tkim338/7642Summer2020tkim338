@@ -35,9 +35,9 @@ def computeReturn(vals, i):
 		
 def generateTrainingSets(sets=100, sequences=10):
 	trainingData = []
-	for i in range(0,sets):
+	for i in range(0, sets):
 		set = []
-		for j in range(0,sequences):
+		for j in range(0, sequences):
 			ind = 3
 			sequence = [ind]
 			while True:
@@ -61,6 +61,9 @@ def printTrainingData(data):
 	print('==================== training data ====================')
 
 def computeRMSE(gt, values):
+	# exclude end (terminal) values in error calculation
+	gt = gt[1:-1]
+	values = values[1:-1]
 	return math.sqrt(sum((values - gt)**2)/len(gt))
 
 ##########################################################################################
@@ -69,15 +72,12 @@ def computeSum(subSeq, lamb, values):
 	summation = 0
 	origVal = values[subSeq[0]]
 	finalLamb = 1
-	for k in range(1, len(subSeq)-1): # exclude first and last states
+	for k in range(1, len(subSeq)-1):  # exclude first and last states
 		newVal = values[subSeq[k]]
-		#print('===='+str(subSeq)+'; '+str(origVal)+', '+str(newVal))
 		summation += (1 - lamb) * lamb**(k-1) * (newVal - origVal)
 		finalLamb -= (1 - lamb) * lamb**(k-1)
-		#print(summation)
 	terminalVal = values[subSeq[-1]]
 	summation += finalLamb * (terminalVal - origVal)
-	#print(summation)
 	return summation
 
 def computeDelta(seq, lamb, alpha, values):
@@ -99,12 +99,10 @@ def processSet_fig3(set, lamb, alpha, threshold=0.0001):
 		values += deltas
 	return values
 
-def processSet_fig4(set, lamb, alpha):
+def processSet_fig4_5(set, lamb, alpha):
 	values = np.array([0, 0.5, 0.5, 0.5, 0.5, 0.5, 1.0])
-
 	for seq in set:
 		values += computeDelta(seq, lamb, alpha, values)
-
 	return values
 
 def computeError(gt, data, lamb, alpha=0.01, fig=3):
@@ -113,8 +111,8 @@ def computeError(gt, data, lamb, alpha=0.01, fig=3):
 	for set in data:
 		if fig == 3:
 			values = processSet_fig3(set, lamb, alpha)
-		elif fig == 4:
-			values = processSet_fig4(set, lamb, alpha)
+		elif fig == 4 or fig == 5:
+			values = processSet_fig4_5(set, lamb, alpha)
 		errors = np.append(errors, computeRMSE(gt, values))
 	return np.mean(errors)
 
@@ -159,12 +157,30 @@ def getFigure4(gt, data):
 	plt.show()
 
 def getFigure5(gt, data):
-	
+	errors = []
+	lambdas = []
+	for lamb in np.arange(0.0, 1.1, 0.1):
+		min_error = [1e100]
+		for alpha in np.arange(0, 0.61, 0.01):
+			e = computeError(gt, data, lamb, alpha, fig=5)
+			if e < min_error[0]:
+				min_error = [e, lamb]
+				e = min_error
+		errors.append(min_error[0])
+		lambdas.append(min_error[1])
+
+	plt.figure()
+	plt.plot(lambdas, errors)
+	plt.title('Figure 5: Average error at best alpha value')
+	plt.xlabel('lambda')
+	plt.ylabel('RMS error using best alpha')
+	plt.show()
 
 
 np.random.seed(1)
 gt = computeGT()
 data = generateTrainingSets(100, 10)
 
-#getFigure3(gt, data)
-getFigure4(gt, data)
+# getFigure3(gt, data)
+# getFigure4(gt, data)
+# getFigure5(gt, data)
