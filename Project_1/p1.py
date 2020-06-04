@@ -86,10 +86,11 @@ def computeDelta(seq, lamb, alpha, values):
 		delta[seq[i]] += alpha * computeSum(seq[i:], lamb, values)
 	return delta
 
-def processSet_fig3(set, lamb, alpha, threshold=0.0001):
-	values = np.array([0, 0, 0, 0, 0, 0, 1.0])
+def processSet_fig3(set, lamb, alpha, values, threshold=0.0001):
+	#values=np.array([0, 0, 0, 0, 0, 0, 1.0])
 	deltas = np.array([1.0]*7)
 	n = 0
+	
 	while max(abs(deltas)) > threshold and n < 100:
 		n += 1
 		deltas = np.array([0.0]*7)
@@ -105,12 +106,12 @@ def processSet_fig4_5(set, lamb, alpha):
 		values += computeDelta(seq, lamb, alpha, values)
 	return values
 
-def computeError(gt, data, lamb, alpha=0.01, fig=3):
+def computeError(gt, data, lamb, alpha=0.01, fig=3, init=np.array([0, 0, 0, 0, 0, 0, 1.0]), threshold=0.0001):
 	errors = np.array([])
 	values = np.array([])
 	for set in data:
 		if fig == 3:
-			values = processSet_fig3(set, lamb, alpha)
+			values = processSet_fig3(set, lamb, alpha, init, threshold)
 		elif fig == 4 or fig == 5:
 			values = processSet_fig4_5(set, lamb, alpha)
 		errors = np.append(errors, computeRMSE(gt, values))
@@ -127,7 +128,6 @@ def getFigure3(gt, data):
 		
 	plt.figure()
 	plt.plot(lambdas, errors)
-	#plt.title('Figure 3: Average error under repeated presentations')
 	plt.xlabel('lambda')
 	plt.ylabel('RMS error')
 	plt.show()
@@ -176,6 +176,54 @@ def getFigure5(gt, data):
 	plt.ylabel('RMS error using best alpha')
 	plt.show()
 
+def testFigure3():
+	np.random.seed(1)
+	gt = computeGT()
+	data = generateTrainingSets(100, 10)
+	
+	plt.figure()
+	handle_list = []
+	
+	mod_init = []
+	mod_alpha = []
+	mod_threshold = []
+	lambdas = []
+	for lamb in np.arange(0.0, 1.1, 0.1):
+		mod_init.append(computeError(gt, data, lamb, fig=3, init=np.array([0, 1, 1, 1, 1, 1, 1.0])))
+		mod_threshold.append(computeError(gt, data, lamb, fig=3, threshold=0.001))
+		mod_alpha.append(computeError(gt, data, lamb, alpha=0.02, fig=3))
+		lambdas.append(lamb)
+		
+	handle_list += plt.plot(lambdas, mod_init, label='Initial estimates: [0, 1, 1, 1, 1, 1, 1]')
+	handle_list += plt.plot(lambdas, mod_threshold, label='Convergence threshold: 0.001')
+	handle_list += plt.plot(lambdas, mod_alpha, label='Learning rate: 0.02')
+	
+	plt.xlabel('lambda')
+	plt.ylabel('RMS error')
+	plt.legend(handles=handle_list)
+	plt.show()
+	
+def testSeedsFigure3():
+	plt.figure()
+	handle_list = []
+	plot_data = [[],[],[],[],[]]
+	lambdas = np.arange(0.0, 1.1, 0.1)
+
+	for n in range(0,5):
+		np.random.seed(n+2)
+		gt = computeGT()
+		data = generateTrainingSets(100, 10)
+
+		for lamb in np.arange(0.0, 1.1, 0.1):
+			plot_data[n].append(computeError(gt, data, lamb, fig=3))
+	
+	for i in range(0,5):
+		handle_list += plt.plot(lambdas, plot_data[i], label='Seed: '+str(i+2))
+	
+	plt.xlabel('lambda')
+	plt.ylabel('RMS error')
+	plt.legend(handles=handle_list)
+	plt.show()
 
 np.random.seed(1)
 gt = computeGT()
@@ -184,3 +232,6 @@ data = generateTrainingSets(100, 10)
 getFigure3(gt, data)
 getFigure4(gt, data)
 getFigure5(gt, data)
+
+#testFigure3()
+#testSeedsFigure3()
