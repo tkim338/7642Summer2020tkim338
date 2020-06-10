@@ -62,8 +62,8 @@ def get_action(environment, policy, eps):
 
 # input params
 gamma = 0.9
-alpha = 0.4
-epsilon = 0.2
+alpha = 0.5
+epsilon = 0.3
 episodes = 10000000
 
 # setup
