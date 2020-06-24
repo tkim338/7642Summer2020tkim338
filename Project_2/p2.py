@@ -5,10 +5,48 @@ import Box2D
 import random
 import matplotlib.pyplot as plt
 
+def heuristic(env, s):
+    """
+    The heuristic for
+    1. Testing
+    2. Demonstration rollout.
+    Args:
+        env: The environment
+        s (list): The state. Attributes:
+                  s[0] is the horizontal coordinate
+                  s[1] is the vertical coordinate
+                  s[2] is the horizontal speed
+                  s[3] is the vertical speed
+                  s[4] is the angle
+                  s[5] is the angular speed
+                  s[6] 1 if first leg has contact, else 0
+                  s[7] 1 if second leg has contact, else 0
+    returns:
+         a: The heuristic to be fed into the step function defined above to determine the next step and reward.
+    """
+
+    angle_targ = s[0]*0.5 + s[2]*1.0         # angle should point towards center
+    if angle_targ > 0.4: angle_targ = 0.4    # more than 0.4 radians (22 degrees) is bad
+    if angle_targ < -0.4: angle_targ = -0.4
+    hover_targ = 0.55*numpy.abs(s[0])           # target y should be proportional to horizontal offset
+
+    angle_todo = (angle_targ - s[4]) * 0.5 - (s[5])*1.0
+    hover_todo = (hover_targ - s[1])*0.5 - (s[3])*0.5
+
+    if s[6] or s[7]:  # legs have contact
+        angle_todo = 0
+        hover_todo = -(s[3])*0.5  # override to reduce fall speed, that's all we need after contact
+
+    a = 0
+    if hover_todo > numpy.abs(angle_todo) and hover_todo > 0.05: a = 2
+    elif angle_todo < -0.05: a = 3
+    elif angle_todo > +0.05: a = 1
+    return a
+
 
 def parse_state(state):
     for i in range(len(state)):
-        state[i] = round(state[i], 2)
+        state[i] = round(state[i], 1)
     return state.tobytes()
 
 
@@ -53,21 +91,38 @@ def get_action(full_state, vertical_policy, horizontal_policy, eps):
     a = numpy.random.random()
     if a < eps:
         return random.choice([0, 1, 2, 3])
+        #return heuristic(None, full_state)
     else:
         return policy_action(full_state, vertical_policy, horizontal_policy)
 
-
 def update_policy(policy, state, action, reward, a, g, prev_policy):
+    if reward < -200:
+        return policy
+    scaled_a = a * (reward+200)/400
+    scaled_a = max(scaled_a, 0.01)
+    scaled_a = min(scaled_a, 0.99)
     if (state, action) in policy:
-        policy[(state, action)] += a * (reward + g * policy[(state, action)] - prev_policy)
+        policy[(state, action)] += scaled_a * (reward + g * policy[(state, action)] - prev_policy)
     else:
         policy[(state, action)] = reward
     return policy
 
+def modify_reward(state, reward, step_num):
+    r = reward
+    if step_num > 500:
+        r -= 100
+    if abs(state[0]) > 0.2: # horizontal coordinate
+        r -= 100
+    if abs(state[4]) > 0.2: # angle [radians]
+        r -= 50
+    if state[3] > 0: # vertical speed
+        r -= 50
+    return r
+
 # input params
-gamma = 0.95
-alpha = 0.2
-epsilon = 0.1
+gamma = 0.99
+alpha = 0.001
+epsilon = 0.5
 episodes = 100000
 
 # setup
@@ -99,9 +154,10 @@ for ep in range(episodes):
     next_action = get_action(ob, v_pol, h_pol, epsilon)
     prev_v_pol = 0
     prev_h_pol = 0
-
-    while not completed and cum_rew > -200 and abs(ob[0]) < 0.3:
+    step = 0
+    while not completed and cum_rew > -200 and abs(ob[0]) < 0.4 and step < 600:
         ob, rew, completed, info = env.step(next_action)
+        #rew = modify_reward(ob, rew, step)
         cum_rew += rew
 
         if next_action in [0, 2]:
@@ -110,12 +166,18 @@ for ep in range(episodes):
         if next_action in [0, 1, 3]:
             h_pol = update_policy(h_pol, get_horizontal(ob), next_action, rew, alpha, gamma, prev_h_pol)
             prev_h_pol = h_pol[(get_horizontal(ob), next_action)]
-
-        env.render()
+        if ep > 5000:
+            env.render()
 
         next_action = get_action(ob, v_pol, h_pol, epsilon)
+        step += 1
+        # epsilon *= 0.9999
+        # epsilon = max(epsilon, 0.1)
+        epsilon = (-1/5000)*ep + 1
 
-    print(str(cum_rew) + ',\t' + str(ep))
+    reward_history.append(cum_rew)
+
+    print('Episode reward:', round(cum_rew, 3), '\tAverage reward:', round(numpy.mean(reward_history[-10:]), 3), '\tEpisode:', ep, '\tepsilon:', round(epsilon, 3))
 
         # reward_history.append(cum_rew)
         # episode_num.append(ep)

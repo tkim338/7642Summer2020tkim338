@@ -1,0 +1,20 @@
+tried value based learning
+tried sarsa model
+tried stopping episodes if reward went too low
+tried stopping episodes if lander when too far off course
+tried reducing dimensions by limiting main engine actions to vertical states and side engines to horizontal states
+added -100 for assuming crash reward if lander was too far off course horizontally
+
+problem would be much harder if graphical input was needed instead of direct states (velocity, etc)
+
+I'm able to solve LL about 50% of the time in under 500 episodes (20-25 minutes) using a vanilla DQN with non-prioritized 
+replay experience selection. Of course, once I chose a common random seed to reproduce an environment to test hyperparameters 
+against, the network never converges. I'm spending my time now searching for hyperparameters to guarantee a more generalized 
+agent.
+
+I feel like I'm just throwing things against the wall to see if they'll stick, like changing alpha, gamma, epsilon decay,  
+model shape, etc. Does anyone have any resources to help point in the direction of how to deal with DQN instability that is 
+extremely dependent on episode variance? I feel like I could go down a rabbit hole of tuning and not find anything.
+
+Update: Without having to build a Bayesian hyperparameter prediction algorithm, I'm going with a non-exhaustive grid search. 
+I'm already seeing some positive results, so hopefully this is the right direction.
