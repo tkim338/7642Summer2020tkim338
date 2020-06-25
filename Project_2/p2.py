@@ -4,6 +4,7 @@ import time
 import Box2D
 import random
 import matplotlib.pyplot as plt
+import csv
 
 def heuristic(env, s):
     """
@@ -122,8 +123,8 @@ def modify_reward(state, reward, step_num):
 # input params
 gamma = 0.99
 alpha = 0.001
-epsilon = 0.5
-episodes = 100000
+epsilon = 0.99
+episodes = 5000
 
 # setup
 env = gym.make('LunarLander-v2').unwrapped
@@ -166,23 +167,21 @@ for ep in range(episodes):
         if next_action in [0, 1, 3]:
             h_pol = update_policy(h_pol, get_horizontal(ob), next_action, rew, alpha, gamma, prev_h_pol)
             prev_h_pol = h_pol[(get_horizontal(ob), next_action)]
-        if ep > 5000:
-            env.render()
+        # if ep > 5000:
+        #     env.render()
 
         next_action = get_action(ob, v_pol, h_pol, epsilon)
         step += 1
         # epsilon *= 0.9999
-        # epsilon = max(epsilon, 0.1)
-        epsilon = (-1/5000)*ep + 1
+        epsilon = (-1/1000)*ep + 1
+        epsilon = max(epsilon, 0.1)
 
     reward_history.append(cum_rew)
 
     print('Episode reward:', round(cum_rew, 3), '\tAverage reward:', round(numpy.mean(reward_history[-10:]), 3), '\tEpisode:', ep, '\tepsilon:', round(epsilon, 3))
 
-        # reward_history.append(cum_rew)
-        # episode_num.append(ep)
-        # #if ep % 10000 == 0:
-        # plt.plot(episode_num, reward_history, 'r.')
-        # plt.draw()
 
-print('asdfasdf')
+with open('sarsa_training_history.csv', "w", newline="") as f:
+    writer = csv.writer(f)
+    for r in reward_history:
+        writer.writerow([r])
