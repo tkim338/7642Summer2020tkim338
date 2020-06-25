@@ -4,6 +4,16 @@ tried stopping episodes if reward went too low
 tried stopping episodes if lander when too far off course
 tried reducing dimensions by limiting main engine actions to vertical states and side engines to horizontal states
 added -100 for assuming crash reward if lander was too far off course horizontally
+had issues with building a nn in pytorch
+switched to keras
+eliminated horizontal coordinate cut-off; after looking at heuristic solution, there are some efficient paths that go far left or right due to initial state
+drastic speed improvement with  tf.compat.v1.disable_eager_execution()
+model is learning to spin clockwise
+changing step count from 300 to 500 resulted in CCW spin
+setting numpy.amax axis=1 seem to fix spin
+replay memory size was accidentally set to batch_size
+
+
 
 problem would be much harder if graphical input was needed instead of direct states (velocity, etc)
 
