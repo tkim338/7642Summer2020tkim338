@@ -32,20 +32,20 @@ class ReplayMemory:
 		rewards = numpy.array([sample.reward for sample in samples])
 		next_states = numpy.array([sample.next_state for sample in samples])
 		done = numpy.array([sample.done for sample in samples])
-		return (states, actions, rewards, next_states, done)
+		return (states, actions, rewards, done, next_states)
 
 class Transition:
-	def __init__(self, state, action, reward, next_state, done):
+	def __init__(self, state, action, reward, done, next_state):
 		self.state = state
 		self.action = action
 		self.reward = reward
-		self.next_state = next_state
 		self.done = done
+		self.next_state = next_state
 
 class LunarLanderLearner:
 
 	def __init__(self, alpha=0.001, gamma=0.99, batch_size=100):
-		self.replay_memory = ReplayMemory(500000)
+		self.replay_memory = ReplayMemory(100000)
 		self.epsilon = 1.0
 		self.epsilon_decay = 0.995
 		self.epsilon_min = 0.01
@@ -66,7 +66,7 @@ class LunarLanderLearner:
 		policy.add(Dense(200, activation=relu))
 		policy.add(Dense(50, activation=relu))
 		policy.add(Dense(len(self.actions), activation=linear))
-		policy.compile(loss=mean_squared_error, optimizer=Adam(lr=alpha))
+		policy.compile(loss=mean_squared_error, optimizer=Adam(learning_rate=alpha))
 		return policy
 
 	def get_action(self):
@@ -121,18 +121,24 @@ class LunarLanderLearner:
 			a = 1
 		return a
 
-	def gradient_descent(self, sample_batch): # (states, actions, rewards, next_states, done's)
+	def gradient_descent(self, sample_batch): # sample_batch = (states, actions, rewards, done, next_states)
 		if len(sample_batch[0]) < self.batch_size:
 			return
 
-		# non-terminal states
-		new_policies = sample_batch[2] + self.gamma * (1 - sample_batch[4]) * numpy.amax(self.policy_net.predict_on_batch(sample_batch[3]), axis=1)
 		# terminal states
-		batch_policy = self.policy_net.predict_on_batch(sample_batch[0])
-		# combine states
-		batch_policy[[range(len(sample_batch[0]))], sample_batch[1]] = new_policies
+		existing_policy = self.policy_net.predict_on_batch(sample_batch[0])
 
-		self.policy_net.fit(sample_batch[0], batch_policy, verbose=False)
+		# non-terminal states
+		best_actions = numpy.amax(self.policy_net.predict_on_batch(sample_batch[4]), axis=1)
+		non_terminal_updates = sample_batch[2] + (sample_batch[3] == 0) * self.gamma * best_actions
+
+		# add policy updates
+		new_policy = existing_policy
+		for s in range(self.batch_size):
+			if sample_batch[3][s] == 0: # non-terminal
+				new_policy[s][sample_batch[1][s]] = non_terminal_updates[s]
+
+		self.policy_net.fit(sample_batch[0], new_policy, verbose=False)
 
 	def train(self, num_episodes):
 		counter = 0
@@ -145,7 +151,7 @@ class LunarLanderLearner:
 				# 	self.env.render()
 				action = self.get_action()
 				next_state, reward, done, info = self.env.step(action)
-				trans = Transition(self.state, action, reward, next_state, done)
+				trans = Transition(self.state, action, reward, done, next_state)
 				self.replay_memory.store_transition(trans)
 				episode_reward += reward
 				self.state = next_state
@@ -155,9 +161,12 @@ class LunarLanderLearner:
 				if done:
 					break
 			self.reward_history.append(episode_reward)
-			self.epsilon = max(self.epsilon*self.epsilon_decay, self.epsilon_min)
 			avg_reward = numpy.mean(self.reward_history[-100:])
+			
 			print('Episode:',ep,'Epsilon:',self.epsilon,'Reward:',episode_reward,'Avg Reward',avg_reward)
+			
+			self.epsilon = max(self.epsilon*self.epsilon_decay, self.epsilon_min)
+			
 			if avg_reward > 200:
 				counter += 1
 			else:
@@ -265,14 +274,15 @@ tensorflow.compat.v1.disable_eager_execution()
 LLL = LunarLanderLearner()
 LLL.env.seed(11)
 random.seed(11)
-LLL.train(1000)
-LLL.save_training_history("training_history.csv")
-LLL.save_testing_history(100)
+# LLL.train(1000)
+# LLL.save_training_history("training_history.csv")
+# LLL.save_testing_history(100)
 
-test_alpha(1000)
-test_gamma(1000)
-test_batch_size(1000)
+# test_alpha(1000)
+# test_gamma(1000)
+# test_batch_size(1000)
 
-random_agent_test(5000)
+# random_agent_test(5000)
 
-run_heuristic_test(1000)
+# run_heuristic_test(1000)
+LLL.train(100)
