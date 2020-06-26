@@ -130,7 +130,7 @@ class LunarLanderLearner:
 
 		# # non-terminal states
 		best_actions = numpy.amax(self.policy_net.predict_on_batch(sample_batch[4]), axis=1)
-		non_terminal_updates = sample_batch[2] + (sample_batch[3] == 0) * self.gamma * best_actions
+		non_terminal_updates = sample_batch[2] + self.gamma * best_actions
 
 		# add policy updates
 		new_policy = existing_policy
@@ -274,15 +274,14 @@ tensorflow.compat.v1.disable_eager_execution()
 LLL = LunarLanderLearner()
 LLL.env.seed(11)
 random.seed(11)
-# LLL.train(1000)
-# LLL.save_training_history("training_history.csv")
-# LLL.save_testing_history(100)
+LLL.train(1000)
+LLL.save_training_history("training_history.csv")
+LLL.save_testing_history(100)
 
-# test_alpha(1000)
-# test_gamma(1000)
-# test_batch_size(1000)
+test_alpha(1000)
+test_gamma(1000)
+test_batch_size(1000)
 
-# random_agent_test(5000)
+random_agent_test(5000)
 
-# run_heuristic_test(1000)
-LLL.train(100)
+run_heuristic_test(1000)
