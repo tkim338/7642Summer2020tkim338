@@ -80,7 +80,7 @@ class LunarLanderLearner:
 		actions = self.policy_net.predict(numpy.array([self.state]))
 		return numpy.argmax(actions)
 
-	def heuristic(self):
+	def heuristic(self): # taken from OpenAI and used for benchmark testing
 		"""
 		The heuristic for
 		1. Testing
