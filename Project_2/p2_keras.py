@@ -8,7 +8,6 @@ import random
 import gym
 import tensorflow
 import csv
-import pickle
 
 class ReplayMemory:
 	def __init__(self, cap):
@@ -81,6 +80,47 @@ class LunarLanderLearner:
 		actions = self.policy_net.predict(numpy.array([self.state]))
 		return numpy.argmax(actions)
 
+	def heuristic(self):
+		"""
+		The heuristic for
+		1. Testing
+		2. Demonstration rollout.
+		Args:
+			env: The environment
+			s (list): The state. Attributes:
+					  s[0] is the horizontal coordinate
+					  s[1] is the vertical coordinate
+					  s[2] is the horizontal speed
+					  s[3] is the vertical speed
+					  s[4] is the angle
+					  s[5] is the angular speed
+					  s[6] 1 if first leg has contact, else 0
+					  s[7] 1 if second leg has contact, else 0
+		returns:
+			 a: The heuristic to be fed into the step function defined above to determine the next step and reward.
+		"""
+		s = self.state
+		angle_targ = s[0] * 0.5 + s[2] * 1.0  # angle should point towards center
+		if angle_targ > 0.4: angle_targ = 0.4  # more than 0.4 radians (22 degrees) is bad
+		if angle_targ < -0.4: angle_targ = -0.4
+		hover_targ = 0.55 * numpy.abs(s[0])  # target y should be proportional to horizontal offset
+
+		angle_todo = (angle_targ - s[4]) * 0.5 - (s[5]) * 1.0
+		hover_todo = (hover_targ - s[1]) * 0.5 - (s[3]) * 0.5
+
+		if s[6] or s[7]:  # legs have contact
+			angle_todo = 0
+			hover_todo = -(s[3]) * 0.5  # override to reduce fall speed, that's all we need after contact
+
+		a = 0
+		if hover_todo > numpy.abs(angle_todo) and hover_todo > 0.05:
+			a = 2
+		elif angle_todo < -0.05:
+			a = 3
+		elif angle_todo > +0.05:
+			a = 1
+		return a
+
 	def gradient_descent(self, sample_batch): # (states, actions, rewards, next_states, done's)
 		if len(sample_batch[0]) < self.batch_size:
 			return
@@ -140,6 +180,7 @@ class LunarLanderLearner:
 				if done:
 					break
 			test_history.append(episode_reward)
+			print('Episode:', ep, 'Reward:', episode_reward)
 		self.epsilon = store_epsilon
 		return test_history
 
@@ -155,6 +196,24 @@ class LunarLanderLearner:
 			writer = csv.writer(f)
 			for r in test_history:
 				writer.writerow([r])
+
+	def heuristic_test(self, num_episodes):
+		test_history = []
+		store_epsilon = self.epsilon
+		self.epsilon = 0
+		for ep in range(num_episodes):
+			self.state = self.env.reset()
+			episode_reward = 0
+			for step in range(self.steps):
+				action = self.heuristic()
+				self.state, reward, done, info = self.env.step(action)
+				episode_reward += reward
+				if done:
+					break
+			test_history.append(episode_reward)
+			print('Episode:', ep, 'Reward:', episode_reward)
+		self.epsilon = store_epsilon
+		return test_history
 
 def test_alpha(num):
 	alphas = [0.0001, 0.01, 0.1]
@@ -183,6 +242,24 @@ def test_batch_size(num):
 		ltbs.train(num)
 		ltbs.save_training_history('batch_size_training_'+str(bs)+'.csv')
 
+def random_agent_test(num):
+	rat = LunarLanderLearner()
+	rat.epsilon = 1.0
+	random_history = rat.test(num)
+	with open("random_agent_training.csv", "w", newline="") as f:
+		writer = csv.writer(f)
+		for r in random_history:
+			writer.writerow([r])
+
+def run_heuristic_test(num):
+	ht = LunarLanderLearner()
+	ht.epsilon = 1.0
+	heuristic_test_history = ht.heuristic_test(num)
+	with open("heuristic_testing.csv", "w", newline="") as f:
+		writer = csv.writer(f)
+		for r in heuristic_test_history:
+			writer.writerow([r])
+
 tensorflow.compat.v1.disable_eager_execution()
 
 LLL = LunarLanderLearner()
@@ -196,4 +273,6 @@ test_alpha(1000)
 test_gamma(1000)
 test_batch_size(1000)
 
+random_agent_test(5000)
 
+run_heuristic_test(1000)
