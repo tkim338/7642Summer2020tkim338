@@ -128,7 +128,7 @@ class LunarLanderLearner:
 		# terminal states
 		existing_policy = self.policy_net.predict_on_batch(sample_batch[0])
 
-		# non-terminal states
+		# # non-terminal states
 		best_actions = numpy.amax(self.policy_net.predict_on_batch(sample_batch[4]), axis=1)
 		non_terminal_updates = sample_batch[2] + (sample_batch[3] == 0) * self.gamma * best_actions
 
