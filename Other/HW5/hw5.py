@@ -15,7 +15,9 @@ def update_patrons(patrons, new_episode, new_outcome):
 				p = new_episode[ind]
 				if p == 1 and 1 in p: # none of these patrons can be the peacemaker
 					new_episode[ind] = p[p != -1]
-
+			if sum(new_episode == 1) == 1: # only one patron
+				new_episode[new_episode == 1] = [1]
+		elif new_outcome == 0
 
 
 
