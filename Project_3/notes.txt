@@ -1,1 +1,5 @@
 did not realize the only tested Q was in a specific state and specific actions for players
+
+initial attempts at friend-q converged to a solution different than what was published
+
+error in algo where positive scores were not always accounted for

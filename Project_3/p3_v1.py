@@ -9,7 +9,6 @@ def grid_key(grid_list):
 focus_state = grid_key([[0.0, 'Bb', 'A', 0.0], [0.0, 0.0, 0.0, 0.0]])
 focus_action_A = 4  # stick
 focus_action_B = 1  # South
-focus_q = []
 
 class Soccer:
 	def __init__(self):
@@ -49,41 +48,43 @@ class Soccer:
 		print('A score: ', self.A.score, '; B score: ', self.B.score)
 
 	def processTurn(self, A_action, B_action):
-		if grid_key(self.grid) == focus_state and A_action == focus_action_A and B_action == focus_action_B:
-			focus_q.append(self.A.q[grid_key(self.grid)][A_action][B_action])
-		temp_grid = self.grid[:]
-
 		if np.random.random() > 0.5:
-			self.processAction(self.A, temp_grid, A_action, B_action)
-			self.processAction(self.B, temp_grid, B_action, A_action)
+			goal_A = self.processAction(self.A, A_action)
+			goal_B = self.processAction(self.B, B_action)
 		else:
-			self.processAction(self.B, temp_grid, B_action, A_action)
-			self.processAction(self.A, temp_grid, A_action, B_action)
+			goal_B = self.processAction(self.B, B_action)
+			goal_A = self.processAction(self.A, A_action)
+
+		if goal_A or goal_B:
+			self.done = True
+			if goal_A:
+				score_A = 100
+				score_B = -100
+			elif goal_B:
+				score_A = -100
+				score_B = 100
+		else:
+			score_A = 0
+			score_B = 0
 
 		self.steps += 1
 		if self.steps > 100:
 			self.done = True
 
-	def processAction(self, player, temp_grid, action, opponent_action):
-		# temp_grid = self.grid
+		self.A.update(grid_key(self.grid), A_action, B_action, score_A)
+		self.B.update(grid_key(self.grid), B_action, A_action, score_B)
 
+		self.grid = np.zeros([2, 4]).tolist()
+		self.grid[self.A.y][self.A.x] = self.A.toString()
+		self.grid[self.B.y][self.B.x] = self.B.toString()
+
+	def processAction(self, player, action):
 		actions = {0: self.up, 1: self.down, 2: self.right, 3: self.left, 4: self.stay}
 		actions[action](player)
-
 		self.grid = np.zeros([2, 4]).tolist()
 		self.grid[player.y][player.x] = player.toString()
 		self.grid[player.opponent.y][player.opponent.x] = player.opponent.toString()
-
-		self.done, player_scored = self.checkGoal(player)
-		if self.done:
-			if player_scored:
-				reward = 100
-			else:
-				reward = -100
-		else:
-			reward = 0
-
-		player.update(grid_key(temp_grid), action, opponent_action, reward)
+		return self.checkGoal(player)
 
 	def up(self, player):
 		if player.y > 0:
@@ -129,12 +130,12 @@ class Soccer:
 			if player.x == player.goal_x:
 				player.score += 100
 				player.opponent.score -= 100
-				return True, True
+				return True
 			elif player.x == player.opponent.goal_x:
 				player.score -= 100
 				player.opponent.score += 100
-				return True, False
-		return False, False
+				return True
+		return False
 
 
 class Player:
@@ -158,7 +159,7 @@ class Player:
 		self.prev_opponent_action = None
 
 		self.q_history = []
-		self.epsilon = 0.5
+		self.epsilon = 0
 
 		# self.first_action = True
 		self.prev_score = 0
@@ -171,21 +172,21 @@ class Player:
 		else:
 			return str(self.name)
 
-	def update(self, game_state, action, opponent_action, reward):
+	def update(self, game_state, action, opponent_action, score):
 		if game_state not in self.q:
 			self.q[game_state] = np.zeros([5, 5]).tolist()
-			self.q[game_state][action][opponent_action] = reward
+			self.q[game_state][action][opponent_action] = score
 
 		if self.prev_state:
 			s = self.prev_state
 			a1 = self.prev_self_action
 			a2 = self.prev_opponent_action
 			v = self.q[game_state][action][opponent_action]
-			# prev_score = self.prev_score
+			prev_score = self.prev_score
 			# new_q = (1 - self.alpha) * self.q[s][a1][a2] + self.alpha * ((1 - self.gamma) * prev_score + self.gamma * v)
 			# new_q = (1 - self.alpha) * self.q[s][a1][a2] + self.alpha * (score + self.gamma * v)
 			# q_table[prev_ob][prev_action] += alpha * (rew + gamma * q_table[ob][next_action] - q_table[prev_ob][prev_action])
-			new_q = self.q[s][a1][a2] + self.alpha * (reward + self.gamma * v - self.q[s][a1][a2])
+			new_q = self.q[s][a1][a2] + self.alpha * (score + self.gamma * v - self.q[s][a1][a2])
 
 			if a1 == focus_action_A and a2 == focus_action_B and s == focus_state:
 				self.q_history.append(abs(self.q[s][a1][a2] - new_q))
@@ -196,14 +197,14 @@ class Player:
 		self.prev_state = game_state
 		self.prev_self_action = action
 		self.prev_opponent_action = opponent_action
-		# self.prev_score = score
+		self.prev_score = score
 
 	def getAction(self, method, game_state):
 		# if self.first_action:
 		# 	self.first_action = False
 		# 	return 1, 4
 		if method == 'random':
-			return random.choice(self.actions)
+			return random.choice(self.actions)#, random.choice(self.opponent.actions)
 		# elif method == 'correlated-q':
 		# elif method == 'foe-q':
 		elif method == 'friend-q':
@@ -216,6 +217,7 @@ class Player:
 	def nash_friend_q(self, game_state):
 		max_reward = -np.inf
 		best_self_action = random.choice(self.actions)
+		# best_opponent_action = random.choice(self.opponent.actions)
 		if game_state in self.q and random.random() > self.epsilon:
 			action_pairs = self.q[game_state]
 			for self_action in range(len(action_pairs)):
@@ -223,8 +225,10 @@ class Player:
 				if action_pairs[self_action][opponent_action] > max_reward:
 					max_reward = action_pairs[self_action][opponent_action]
 					best_self_action = self_action
+					# best_opponent_action = opponent_action
+		# self.epsilon = max(0.001, 0.99999*self.epsilon)
 		self.alpha = max(0.0001, 0.9999*self.alpha)
-		return best_self_action
+		return best_self_action#, best_opponent_action
 
 #
 #
@@ -298,7 +302,7 @@ def run_friend_games(num, s):
 # print(s.done)
 
 soc = Soccer()
-soc = run_random_games(100000, soc)
-# soc.A.q_history = []
+# soc = run_random_games(100000, soc)
+soc.A.q_history = []
 # soc.A.temp = []
-# soc = run_friend_games(100000, soc)
+soc = run_friend_games(1000, soc)
