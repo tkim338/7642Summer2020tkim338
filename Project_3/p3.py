@@ -9,7 +9,16 @@ def grid_key(grid_list):
 focus_state = grid_key([[0.0, 'Bb', 'A', 0.0], [0.0, 0.0, 0.0, 0.0]])
 focus_action_A = 4  # stick
 focus_action_B = 1  # South
-focus_q = []
+# focus_q = []
+# focus_q_learning = []
+
+V = pulp.LpVariable("V")
+pulp_vars = {}
+pulp_vars[0] = pulp.LpVariable('pi_up', lowBound=0)
+pulp_vars[1] = pulp.LpVariable('pi_down', lowBound=0)
+pulp_vars[2] = pulp.LpVariable('pi_right', lowBound=0)
+pulp_vars[3] = pulp.LpVariable('pi_left', lowBound=0)
+pulp_vars[4] = pulp.LpVariable('pi_stay', lowBound=0)
 
 class Soccer:
 	def __init__(self):
@@ -49,8 +58,10 @@ class Soccer:
 		print('A score: ', self.A.score, '; B score: ', self.B.score)
 
 	def processTurn(self, A_action, B_action):
-		if grid_key(self.grid) == focus_state and A_action == focus_action_A and B_action == focus_action_B:
-			focus_q.append(self.A.q[grid_key(self.grid)][A_action][B_action])
+		# if grid_key(self.grid) == focus_state and A_action == focus_action_A:
+		# 	focus_q_learning.append(self.A.q[grid_key(self.grid)][A_action][B_action])
+		# 	if B_action == focus_action_B:
+		# 		focus_q.append(self.A.q[grid_key(self.grid)][A_action][B_action])
 		temp_grid = self.grid[:]
 
 		if np.random.random() > 0.5:
@@ -123,6 +134,8 @@ class Soccer:
 		if player.hasBall:
 			player.hasBall = False
 			player.opponent.hasBall = True
+		player.score -= 1
+		player.opponent.score -= 1
 
 	def checkGoal(self, player):
 		if player.hasBall:
@@ -150,20 +163,19 @@ class Player:
 		self.score = 0
 
 		self.q = {}
-		self.alpha = 0.5
-		self.gamma = 0.8
+		self.alpha = 0.999
+		self.gamma = 0.9
 
 		self.prev_state = None
 		self.prev_self_action = None
 		self.prev_opponent_action = None
 
 		self.q_history = []
-		self.epsilon = 0.5
+		self.epsilon = 0.999
 
-		# self.first_action = True
-		self.prev_score = 0
+		self.ql = False
 
-		self.temp = []
+		# self.temp = []
 
 	def toString(self):
 		if self.hasBall:
@@ -172,133 +184,169 @@ class Player:
 			return str(self.name)
 
 	def update(self, game_state, action, opponent_action, reward):
-		if game_state not in self.q:
-			self.q[game_state] = np.zeros([5, 5]).tolist()
-			self.q[game_state][action][opponent_action] = reward
+		if self.ql:
+			if game_state not in self.q:
+				self.q[game_state] = np.zeros(5).tolist()
+				self.q[game_state][action] = reward
 
-		if self.prev_state:
-			s = self.prev_state
-			a1 = self.prev_self_action
-			a2 = self.prev_opponent_action
-			v = self.q[game_state][action][opponent_action]
-			# prev_score = self.prev_score
-			# new_q = (1 - self.alpha) * self.q[s][a1][a2] + self.alpha * ((1 - self.gamma) * prev_score + self.gamma * v)
-			# new_q = (1 - self.alpha) * self.q[s][a1][a2] + self.alpha * (score + self.gamma * v)
-			# q_table[prev_ob][prev_action] += alpha * (rew + gamma * q_table[ob][next_action] - q_table[prev_ob][prev_action])
-			new_q = self.q[s][a1][a2] + self.alpha * (reward + self.gamma * v - self.q[s][a1][a2])
+			if self.prev_state:
+				s = self.prev_state
+				a1 = self.prev_self_action
+				v = self.q[game_state][action]
 
-			if a1 == focus_action_A and a2 == focus_action_B and s == focus_state:
-				self.q_history.append(abs(self.q[s][a1][a2] - new_q))
-				self.temp.append(new_q)
+				new_q = self.q[s][a1] + self.alpha * (reward + self.gamma * v - self.q[s][a1])
+				self.q[s][a1] = new_q
 
-			self.q[s][a1][a2] = new_q
+		else:
+			if game_state not in self.q:
+				self.q[game_state] = np.zeros([5, 5]).tolist()
+				self.q[game_state][action][opponent_action] = reward
+
+			if self.prev_state:
+				s = self.prev_state
+				a1 = self.prev_self_action
+				a2 = self.prev_opponent_action
+				v = self.q[game_state][action][opponent_action]
+
+				new_q = self.q[s][a1][a2] + self.alpha * (reward + self.gamma * v - self.q[s][a1][a2])
+				self.q[s][a1][a2] = new_q
 
 		self.prev_state = game_state
 		self.prev_self_action = action
 		self.prev_opponent_action = opponent_action
-		# self.prev_score = score
+		self.alpha = max(0.0001, 0.9999 * self.alpha)
+		self.epsilon = max(0.0001, 0.9999 * self.epsilon)
 
 	def getAction(self, method, game_state):
-		# if self.first_action:
-		# 	self.first_action = False
-		# 	return 1, 4
 		if method == 'random':
 			return random.choice(self.actions)
-		# elif method == 'correlated-q':
-		# elif method == 'foe-q':
+		elif method == 'foe-q':
+			return self.nash_foe_q(game_state)
 		elif method == 'friend-q':
 			return self.nash_friend_q(game_state)
 		elif method == 'q-learning':
 			return self.q_learning(game_state)
+		elif method == 'correlated-q':
+			return self.utilitarian_ce_q(game_state)
 
-	# def foe_q_action(self):
-	#
-	def nash_friend_q(self, game_state):
+	def utilitarian_ce_q(self, game_state):
+		max_reward = -np.inf
+		best_self_action = random.choice(self.actions)
+		if random.random() > self.epsilon:
+			if game_state in self.q and game_state in self.opponent.q:
+				action_pairs = np.array(self.q[game_state]) + np.array(self.opponent.q[game_state])
+				action_pairs = action_pairs.tolist()
+
+				for self_action in range(len(action_pairs)):
+					opponent_action = action_pairs[self_action].index(max(action_pairs[self_action]))
+					if action_pairs[self_action][opponent_action] > max_reward:
+						max_reward = action_pairs[self_action][opponent_action]
+						best_self_action = self_action
+
+		return best_self_action
+
+	def q_learning(self, game_state):
 		max_reward = -np.inf
 		best_self_action = random.choice(self.actions)
 		if game_state in self.q and random.random() > self.epsilon:
 			action_pairs = self.q[game_state]
 			for self_action in range(len(action_pairs)):
+				reward = action_pairs[self_action]
+				if reward > max_reward:
+					max_reward = reward
+					best_self_action = self_action
+
+		return best_self_action
+
+	def nash_friend_q(self, game_state):
+		max_reward = -np.inf
+		best_self_action = random.choice(self.actions)
+		best_opponent_action = random.choice(self.actions)
+		if game_state in self.q and random.random() > self.epsilon:
+			# if self.name == 'A':
+			action_pairs = self.q[game_state]
+			# else:
+			# 	action_pairs = self.opponent.q[game_state]
+
+			for self_action in range(len(action_pairs)):
 				opponent_action = action_pairs[self_action].index(max(action_pairs[self_action]))
 				if action_pairs[self_action][opponent_action] > max_reward:
 					max_reward = action_pairs[self_action][opponent_action]
 					best_self_action = self_action
-		self.alpha = max(0.0001, 0.9999*self.alpha)
+					best_opponent_action = opponent_action
+		# if self.name == 'A':
+		return best_self_action
+		# else:
+		# 	return best_opponent_action
+
+	def nash_foe_q(self, game_state):
+		best_self_action = random.choice(self.actions)
+		if game_state in self.q and random.random() > self.epsilon:
+			action_pairs = self.q[game_state] # 5x5
+
+			Lp_prob = pulp.LpProblem('Problem', pulp.LpMaximize)
+
+			Lp_prob += V
+			Lp_prob += pulp_vars[0]+pulp_vars[1]+pulp_vars[2]+pulp_vars[3]+pulp_vars[4] == 1
+			for ap in action_pairs:
+				Lp_prob += ap[0]*pulp_vars[0] + ap[1]*pulp_vars[1] + ap[2]*pulp_vars[2] + ap[3]*pulp_vars[3] + ap[4]*pulp_vars[4] >= V
+			Lp_prob.solve()
+			pi = []
+			for i in range(5):
+				pi.append(max(0, pulp.value(pulp_vars[i])))
+			best_self_action = np.random.choice(self.actions, p=pi)
+
 		return best_self_action
 
-#
-#
-# def nash_foe_q(self):
-
-
-def run_random_games(num, s):
-	# s = Soccer()
+def run_games(num, s, policy_type):
 	s.reset()
+	q_history = []
+	prev_q = 0
 	for i in range(num):
+		print(i,'/',num)
 		while not s.done:
 			# s.render()
-			A_action = s.A.getAction('random', grid_key(s.grid))
-			B_action = s.B.getAction('random', grid_key(s.grid))
+			A_action = s.A.getAction(policy_type, grid_key(s.grid))
+			B_action = s.B.getAction(policy_type, grid_key(s.grid))
 			s.processTurn(A_action, B_action)
-		s.render()
-		print('=====================================')
+		# s.render()
+		# print('=====================================')
+		if policy_type == 'q-learning':
+			q_history.append(abs(prev_q - s.A.q[focus_state][focus_action_A]))
+			prev_q = s.A.q[focus_state][focus_action_A]
+		else:
+			q_history.append(abs(prev_q - s.A.q[focus_state][focus_action_A][focus_action_B]))
+			prev_q = s.A.q[focus_state][focus_action_A][focus_action_B]
 		s.reset()
 
-	with open("random_q_history.csv", "w", newline="") as f:
+	with open("./data/" + policy_type + "_history.csv", "w", newline="") as f:
 		writer = csv.writer(f)
-		for r in s.A.q_history:
+		for r in q_history:
 			writer.writerow([r])
 
 	print('done')
 	return s
 
+def run_random_games(num, s):
+	return run_games(num, s, 'random')
 
 def run_friend_games(num, s):
-	# s = Soccer()
-	s.reset()
-	for i in range(num):
-		# A_action = focus_action_A
-		# B_action = focus_action_B
-		# s.processTurn(A_action, B_action)
-		while not s.done:
-			s.render()
-			A_action = s.A.getAction('friend-q', grid_key(s.grid))
-			B_action = s.B.getAction('friend-q', grid_key(s.grid))
-			s.processTurn(A_action, B_action)
-		s.render()
-		print('=====================================')
-		s.reset()
+	return run_games(num, s, 'friend-q')
 
-	with open("friend_q_history.csv", "w", newline="") as f:
-		writer = csv.writer(f)
-		for r in s.A.q_history:
-			writer.writerow([r])
+def run_foe_games(num, s):
+	return run_games(num, s, 'foe-q')
 
-	with open("temp.csv", "w", newline="") as f:
-		writer = csv.writer(f)
-		for r in s.A.temp:
-			writer.writerow([r])
+def run_q_learning_games(num, s):
+	s.A.ql = True
+	s.B.ql = True
+	return run_games(num, s, 'q-learning')
 
-	print('done')
-	return s
+def run_correlated_q_games(num, s):
+	return run_games(num, s, 'correlated-q')
 
-
-# s = Soccer()
-# s.render()
-#
-# s.processTurn(4, 2) # down
-# s.render()
-# s.processTurn(2, 4) # right
-# s.render()
-# s.processTurn(4, 4) # right
-# s.render()
-
-# print(s.grid)
-# print(tuple(s.grid))
-# print(s.done)
-
-soc = Soccer()
-soc = run_random_games(100000, soc)
-# soc.A.q_history = []
-# soc.A.temp = []
-# soc = run_friend_games(100000, soc)
+n = 100000
+# run_random_games(n, Soccer())
+run_friend_games(n, Soccer())
+# run_foe_games(n, Soccer())
+# run_q_learning_games(n, Soccer())
+# run_correlated_q_games(n, Soccer())
